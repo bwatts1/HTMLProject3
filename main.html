@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Game of Life</title>
+  <style>
+    #gridContainer {
+      display: flex;
+      flex-wrap: wrap;
+      border: 1px solid black;
+    }
+    #gridContainer div {
+      width: 40px;
+      height: 40px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      background-color: white;
+    }
+    #gridContainer div.alive {
+      background-color: black;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Game of Life</h1>
+
+<div id="gridContainer"></div>
+
+<br>
+
+<button onclick="start()">Start</button>
+<button onclick="stop()">Stop</button>
+<button onclick="runOne()">Next</button>
+<button onclick="runx()">+10 generations</button>
+<button onclick="reset()">Reset</button>
+<br><br>
+<input type="text" id="saveName" placeholder="Enter save name">
+<button onclick="save(document.getElementById('saveName').value)">Save</button>
+<input type="text" id="loadName" placeholder="Enter load name">
+<button onclick="load(document.getElementById('loadName').value)">Load</button>
+
+<script>
+    // Initialize grid settings
+    let cols = 10;
+    let rows = 10;
+    let grid;
+    let running = false;
+    let interval;
+    let generation = 0;
+
+    function makeGrid(cols, rows) {
+        let arr = new Array(cols);
+        for (let i = 0; i < cols; i++) {
+            arr[i] = new Array(rows).fill(0);
+        }
+        return arr;
+    }
+
+    function buildFlexboxGrid() {
+        const container = document.getElementById('gridContainer');
+        container.innerHTML = '';
+        container.style.width = `${cols * 40}px`;
+        container.style.height = `${rows * 40}px`;
+
+        for (let j = 0; j < rows; j++) {
+            for (let i = 0; i < cols; i++) {
+                const cell = document.createElement('div');
+                cell.dataset.i = i;
+                cell.dataset.j = j;
+                cell.style.width = '40px';
+                cell.style.height = '40px';
+                cell.style.boxSizing = 'border-box';
+                cell.style.border = '1px solid #ccc';
+                cell.style.backgroundColor = grid[i][j] === 1 ? 'black' : 'white';
+                cell.addEventListener('click', () => {
+                    grid[i][j] = 1 - grid[i][j];
+                    buildFlexboxGrid();
+                });
+                container.appendChild(cell);
+            }
+        }
+    }
+
+    function check(i, j) {
+        let neighbors = 0;
+        for (let x = -1; x <= 1; x++) {
+            for (let y = -1; y <= 1; y++) {
+                if (x === 0 && y === 0) continue;
+                let col = i + x;
+                let row = j + y;
+                if (col >= 0 && col < cols && row >= 0 && row < rows) {
+                    neighbors += grid[col][row];
+                }
+            }
+        }
+        return neighbors;
+    }
+
+    function state() {
+        let grid2 = makeGrid(cols, rows);
+        for (let i = 0; i < cols; i++) {
+            for (let j = 0; j < rows; j++) {
+                let neighbors = check(i, j);
+                if (grid[i][j] === 1) {
+                    grid2[i][j] = (neighbors === 2 || neighbors === 3) ? 1 : 0;
+                } else {
+                    grid2[i][j] = (neighbors === 3) ? 1 : 0;
+                }
+            }
+        }
+        grid = grid2;
+        buildFlexboxGrid();
+    }
+
+    function start() {
+        if (!running) {
+            running = true;
+            interval = setInterval(() => {
+                generation++;
+                state();
+            }, 500);
+        }
+    }
+
+    function stop() {
+        running = false;
+        clearInterval(interval);
+    }
+
+    function runOne() {
+        generation++;
+        state();
+    }
+
+    function runx() {
+        for (let i = 0; i < 10; i++) {
+            generation++;
+            state();
+        }
+    }
+
+    function reset() {
+        grid = makeGrid(cols, rows);
+        generation = 0;
+        running = false;
+        buildFlexboxGrid();
+    }
+
+    function save(name) {
+        let gridString = grid.map(row => row.join('')).join('');
+        fetch(`save_load.php?name=${encodeURIComponent(name)}&grid=${gridString}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Grid saved successfully');
+            } else {
+                console.error('Save failed', data.message || 'Unknown error');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function load(name) {
+        fetch(`save_load.php?name=${encodeURIComponent(name)}`, {
+            method: 'GET'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.grid) {
+                grid = data.grid.split('').reduce((arr, val, index) => {
+                    if (index % cols === 0) arr.push([]);
+                    arr[arr.length - 1].push(Number(val));
+                    return arr;
+                }, []);
+                buildFlexboxGrid();
+            } else {
+                console.error('Load failed', data.message || 'Grid not found');
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    window.onload = function() {
+        grid = makeGrid(cols, rows);
+        buildFlexboxGrid();
+    }
+</script>
+
+</body>
+</html>
